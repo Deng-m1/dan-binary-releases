@@ -16,6 +16,7 @@ WEB_TOKEN="linuxdo"
 CLIENT_API_TOKEN="linuxdo"
 PORT="25666"
 DEFAULT_PROXY=""
+DEFAULT_DOMAINS_API_URL="https://gpt-up.icoa.pp.ua/v0/management/domains"
 SYSTEMD="0"
 SERVICE_NAME="dan-web"
 BACKGROUND="0"
@@ -90,6 +91,47 @@ json_escape() {
   value=${value//$'\r'/\\r}
   value=${value//$'\t'/\\t}
   printf '%s' "$value"
+}
+
+trim() {
+  printf '%s' "${1-}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+resolve_domains_api_url() {
+  local base
+  base="$(trim "${CPA_BASE_URL:-}")"
+  if [[ -z "$base" ]]; then
+    printf '%s' "$DEFAULT_DOMAINS_API_URL"
+    return
+  fi
+  base="${base%/}"
+  if [[ "$base" == */v0/management/domains ]]; then
+    printf '%s' "$base"
+  elif [[ "$base" == */v0/management ]]; then
+    printf '%s/domains' "$base"
+  else
+    printf '%s/v0/management/domains' "$base"
+  fi
+}
+
+fetch_domains_json() {
+  local url raw compact domains
+  url="$1"
+  raw="$(curl -fsSL "$url")" || {
+    echo "Failed to fetch domains from ${url}" >&2
+    exit 1
+  }
+  compact="$(printf '%s' "$raw" | tr -d '\r\n')"
+  domains="$(printf '%s' "$compact" | sed -n 's/.*"domains"[[:space:]]*:[[:space:]]*\(\[[^]]*]\).*/\1/p')"
+  if [[ -z "$domains" ]]; then
+    echo "Domains API returned an invalid payload: $raw" >&2
+    exit 1
+  fi
+  if [[ "$domains" == "[]" ]]; then
+    echo "Domains API returned an empty domains list." >&2
+    exit 1
+  fi
+  printf '%s' "$domains"
 }
 
 detect_os() {
@@ -178,6 +220,10 @@ fi
 
 rm -f "$INSTALL_DIR/SHA256SUMS.unix.txt"
 
+DOMAINS_API_URL="$(resolve_domains_api_url)"
+echo "Fetching domains from ${DOMAINS_API_URL}..."
+DOMAINS_JSON="$(fetch_domains_json "$DOMAINS_API_URL")"
+
 cat > "$INSTALL_DIR/config.json" <<EOF
 {
   "ak_file": "ak.txt",
@@ -207,73 +253,8 @@ cat > "$INSTALL_DIR/config/web_config.json" <<EOF
   "client_api_token": "$(json_escape "$CLIENT_API_TOKEN")",
   "client_notice": "",
   "minimum_client_version": "",
-  "enabled_email_domains": [
-    "*.icoa.qzz.io",
-    "*.icoe.pp.ua",
-    "*.icoa.pp.ua",
-    "*.uoou.cc.cd",
-    "*.icoa.us.ci",
-    "*.ice.qq11.top",
-    "*.myanglealtman.tech",
-    "*.ice.lyzswx.eu.org",
-    "*.ice.aoko.cc.cd",
-    "*.ice.aoko.eu.cc",
-    "*.ice.chaldea.eu.cc",
-    "*.ice.mssk.eu.cc",
-    "*.ice.mssk.qzz.io",
-    "*.linux.archerguo.de5.net",
-    "*.linux.airforceone.online",
-    "*.ice.kitakamis.online",
-    "*.ice.0987134.xyz",
-    "*.ice.icecodex.us.ci",
-    "*.ice.oo.oogoo.top",
-    "*.ice.jiayou0328.us.ci",
-    "*.icecream.707979.xyz",
-    "*.ice.help.itbasee.top",
-    "*.ice.863973.dpdns.org",
-    "*.ice.tinytiger.top",
-    "*.ice.yucici.qzz.io",
-    "*.love.biaozi.de5.net",
-    "*.love.dogge.de5.net",
-    "*.love.mobil.dpdns.org",
-    "*.love.vercel.dpdns.org",
-    "*.love.google.nyc.mn"
-  ],
-  "mail_domain_options": [
-    "*.icoa.qzz.io",
-    "*.icoe.pp.ua",
-    "*.icoa.pp.ua",
-    "*.uoou.cc.cd",
-    "*.icoa.ccwu.cc",
-    "*.icoa.us.ci",
-    "*.ice.qq11.top",
-    "*.myanglealtman.tech",
-    "*.ice.lyzswx.eu.org",
-    "*.ice.aoko.cc.cd",
-    "*.ice.aoko.eu.cc",
-    "*.ice.chaldea.eu.cc",
-    "*.ice.mssk.eu.cc",
-    "*.ice.mssk.qzz.io",
-    "*.linux.archerguo.de5.net",
-    "*.linux.airforceone.online",
-    "*.ice.kitakamis.online",
-    "*.ice.0987134.xyz",
-    "*.ice.icecodex.us.ci",
-    "*.ice.icecodex.ccwu.cc",
-    "*.ice.oo.oogoo.top",
-    "*.ice.jiayou0328.ccwu.cc",
-    "*.ice.jiayou0328.us.ci",
-    "*.icecream.707979.xyz",
-    "*.ice.help.itbasee.top",
-    "*.ice.863973.dpdns.org",
-    "*.ice.tinytiger.top",
-    "*.ice.yucici.qzz.io",
-    "*.love.biaozi.de5.net",
-    "*.love.dogge.de5.net",
-    "*.love.mobil.dpdns.org",
-    "*.love.vercel.dpdns.org",
-    "*.love.google.nyc.mn"
-  ],
+  "enabled_email_domains": ${DOMAINS_JSON},
+  "mail_domain_options": ${DOMAINS_JSON},
   "default_proxy": "$(json_escape "$DEFAULT_PROXY")",
   "use_registration_proxy": $([[ -n "${DEFAULT_PROXY// }" ]] && printf 'true' || printf 'false'),
   "cpa_base_url": "$(json_escape "$CPA_BASE_URL")",

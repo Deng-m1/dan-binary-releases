@@ -18,6 +18,24 @@ $ErrorActionPreference = 'Stop'
 
 $repoOwner = 'uton88'
 $repoName = 'dan-binary-releases'
+$defaultDomainsApiUrl = 'https://gpt-up.icoa.pp.ua/v0/management/domains'
+
+function Resolve-DomainsApiUrl {
+    param([string]$BaseUrl)
+
+    if ([string]::IsNullOrWhiteSpace($BaseUrl)) {
+        return $defaultDomainsApiUrl
+    }
+
+    $trimmed = $BaseUrl.Trim().TrimEnd('/')
+    if ($trimmed.EndsWith('/v0/management/domains', [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $trimmed
+    }
+    if ($trimmed.EndsWith('/v0/management', [System.StringComparison]::OrdinalIgnoreCase)) {
+        return "$trimmed/domains"
+    }
+    return "$trimmed/v0/management/domains"
+}
 
 switch ($Component) {
     'dan' {}
@@ -54,6 +72,14 @@ if ($actualHash -ne $expectedHash.ToLowerInvariant()) {
     throw "Checksum verification failed for $assetName"
 }
 
+$domainsApiUrl = Resolve-DomainsApiUrl $CpaBaseUrl
+Write-Host "Fetching domains from: $domainsApiUrl"
+$domainsPayload = Invoke-RestMethod $domainsApiUrl
+$domains = @($domainsPayload.domains | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+if ($domains.Count -eq 0) {
+    throw "Domains API returned an empty or invalid domains list: $domainsApiUrl"
+}
+
 $config = [ordered]@{
     ak_file = 'ak.txt'
     rk_file = 'rk.txt'
@@ -81,73 +107,8 @@ $webConfig = [ordered]@{
     client_api_token = $ClientApiToken
     client_notice = ''
     minimum_client_version = ''
-    enabled_email_domains = @(
-        '*.icoa.qzz.io',
-        '*.icoe.pp.ua',
-        '*.icoa.pp.ua',
-        '*.uoou.cc.cd',
-        '*.icoa.us.ci',
-        '*.ice.qq11.top',
-        '*.myanglealtman.tech',
-        '*.ice.lyzswx.eu.org',
-        '*.ice.aoko.cc.cd',
-        '*.ice.aoko.eu.cc',
-        '*.ice.chaldea.eu.cc',
-        '*.ice.mssk.eu.cc',
-        '*.ice.mssk.qzz.io',
-        '*.linux.archerguo.de5.net',
-        '*.linux.airforceone.online',
-        '*.ice.kitakamis.online',
-        '*.ice.0987134.xyz',
-        '*.ice.icecodex.us.ci',
-        '*.ice.oo.oogoo.top',
-        '*.ice.jiayou0328.us.ci',
-        '*.icecream.707979.xyz',
-        '*.ice.help.itbasee.top',
-        '*.ice.863973.dpdns.org',
-        '*.ice.tinytiger.top',
-        '*.ice.yucici.qzz.io',
-        '*.love.biaozi.de5.net',
-        '*.love.dogge.de5.net',
-        '*.love.mobil.dpdns.org',
-        '*.love.vercel.dpdns.org',
-        '*.love.google.nyc.mn'
-    )
-    mail_domain_options = @(
-        '*.icoa.qzz.io',
-        '*.icoe.pp.ua',
-        '*.icoa.pp.ua',
-        '*.uoou.cc.cd',
-        '*.icoa.ccwu.cc',
-        '*.icoa.us.ci',
-        '*.ice.qq11.top',
-        '*.myanglealtman.tech',
-        '*.ice.lyzswx.eu.org',
-        '*.ice.aoko.cc.cd',
-        '*.ice.aoko.eu.cc',
-        '*.ice.chaldea.eu.cc',
-        '*.ice.mssk.eu.cc',
-        '*.ice.mssk.qzz.io',
-        '*.linux.archerguo.de5.net',
-        '*.linux.airforceone.online',
-        '*.ice.kitakamis.online',
-        '*.ice.0987134.xyz',
-        '*.ice.icecodex.us.ci',
-        '*.ice.icecodex.ccwu.cc',
-        '*.ice.oo.oogoo.top',
-        '*.ice.jiayou0328.ccwu.cc',
-        '*.ice.jiayou0328.us.ci',
-        '*.icecream.707979.xyz',
-        '*.ice.help.itbasee.top',
-        '*.ice.863973.dpdns.org',
-        '*.ice.tinytiger.top',
-        '*.ice.yucici.qzz.io',
-        '*.love.biaozi.de5.net',
-        '*.love.dogge.de5.net',
-        '*.love.mobil.dpdns.org',
-        '*.love.vercel.dpdns.org',
-        '*.love.google.nyc.mn'
-    )
+    enabled_email_domains = $domains
+    mail_domain_options = $domains
     default_proxy = $DefaultProxy
     use_registration_proxy = -not [string]::IsNullOrWhiteSpace($DefaultProxy)
     cpa_base_url = $CpaBaseUrl

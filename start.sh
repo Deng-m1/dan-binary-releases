@@ -8,11 +8,14 @@ mkdir -p "$INSTALL_DIR/config"
 cd "$INSTALL_DIR"
 
 # 2. 准备配置文件
+# 强制使用 25666 端口，因为 dan-web 二进制文件似乎硬编码了该端口
+TARGET_PORT=25666
+
 if [ ! -f "web_config.json" ]; then
     echo "[INFO] Creating web_config.json..."
     cat > web_config.json <<EOC
 {
-  "port": ${PORT:-25666},
+  "port": $TARGET_PORT,
   "threads": ${THREADS:-20},
   "cpa_base_url": "${CPA_BASE_URL:-https://gpt-up.icoa.pp.ua/}",
   "cpa_token": "${CPA_TOKEN:-linuxdo}",
@@ -28,7 +31,7 @@ else
 import json, os\
 with open('web_config.json', 'r') as f:\
     data = json.load(f)\
-data['port'] = int(os.getenv('PORT', data.get('port', 25666)))\
+data['port'] = $TARGET_PORT\
 data['threads'] = int(os.getenv('THREADS', data.get('threads', 20)))\
 data['cpa_base_url'] = os.getenv('CPA_BASE_URL', data.get('cpa_base_url', 'https://gpt-up.icoa.pp.ua/'))\
 data['cpa_token'] = os.getenv('CPA_TOKEN', data.get('cpa_token', 'linuxdo'))\
@@ -47,5 +50,5 @@ echo "[DEBUG] Current web_config.json content:"
 cat web_config.json
 
 # 4. 启动程序
-echo "[INFO] Launching dan-web binary on port ${PORT:-25666}..."
+echo "[INFO] Launching dan-web binary on port $TARGET_PORT..."
 exec /app/dan-web

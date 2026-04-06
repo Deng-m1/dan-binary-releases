@@ -12,23 +12,65 @@ MAIL_API_KEY="${MAIL_API_KEY:-linuxdo}"
 THREADS="${THREADS:-20}"
 WEB_TOKEN="${WEB_TOKEN:-linuxdo}"
 CLIENT_API_TOKEN="${CLIENT_API_TOKEN:-linuxdo}"
-# Railway 会注入 PORT 环境变量，使用它作为程序的监听端口
 PORT="${PORT:-25666}"
 DEFAULT_PROXY="${DEFAULT_PROXY:-}"
+DEFAULT_DOMAINS_API_URL="https://gpt-up.icoa.pp.ua/v0/management/domains"
 
 # 辅助函数：JSON 字符串转义
 json_escape() {
   local value="${1-}"
   value=${value//\\/\\\\}
   value=${value//\"/\\\"}
-  value=${value//$\'\\n\'/\\n}
-  value=${value//$\'\\r\'/\\r}
-  value=${value//$\'\\t\'/\\t}
+  value=${value//$'\n'/\\n}
+  value=${value//$'\r'/\\r}
+  value=${value//$'\t'/\\t}
   printf '%s' "$value"
 }
 
+trim() {
+  printf '%s' "${1-}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+resolve_domains_api_url() {
+  local base
+  base="$(trim "${CPA_BASE_URL:-}")"
+  if [[ -z "$base" ]]; then
+    printf '%s' "$DEFAULT_DOMAINS_API_URL"
+    return
+  fi
+  base="${base%/}"
+  if [[ "$base" == */v0/management/domains ]]; then
+    printf '%s' "$base"
+  elif [[ "$base" == */v0/management ]]; then
+    printf '%s/domains' "$base"
+  else
+    printf '%s/v0/management/domains' "$base"
+  fi
+}
+
+fetch_domains_json() {
+  local url raw compact domains
+  url="$1"
+  raw="$(curl -fsSL "$url")" || {
+    echo "Failed to fetch domains from ${url}" >&2
+    exit 1
+  }
+  compact="$(printf '%s' "$raw" | tr -d '\r\n')"
+  domains="$(printf '%s' "$compact" | sed -n 's/.*"domains"[[:space:]]*:[[:space:]]*\(\[[^]]*]\).*/\1/p')"
+  if [[ -z "$domains" ]]; then
+    echo "Domains API returned an invalid payload: $raw" >&2
+    exit 1
+  fi
+  printf '%s' "$domains"
+}
+
+# 获取域名列表
+DOMAINS_API_URL="$(resolve_domains_api_url)"
+echo "Fetching domains from ${DOMAINS_API_URL}..."
+DOMAINS_JSON="$(fetch_domains_json "$DOMAINS_API_URL")"
+
 # 生成 config.json
-cat > "$INSTALL_DIR/config.json" <<EOF
+cat > "$INSTALL_DIR/config.json" <<EOC
 {
   "ak_file": "ak.txt",
   "rk_file": "rk.txt",
@@ -44,11 +86,11 @@ cat > "$INSTALL_DIR/config.json" <<EOF
   "enable_oauth": true,
   "oauth_required": true
 }
-EOF
+EOC
 
 # 生成 config/web_config.json
 mkdir -p "$INSTALL_DIR/config"
-cat > "$INSTALL_DIR/config/web_config.json" <<EOF
+cat > "$INSTALL_DIR/config/web_config.json" <<EOW
 {
   "target_min_tokens": 15000,
   "auto_fill_start_gap": 1,
@@ -61,8 +103,8 @@ cat > "$INSTALL_DIR/config/web_config.json" <<EOF
   "client_api_token": "$(json_escape "$CLIENT_API_TOKEN")",
   "client_notice": "",
   "minimum_client_version": "",
-  "enabled_email_domains": [],
-  "mail_domain_options": [],
+  "enabled_email_domains": ${DOMAINS_JSON},
+  "mail_domain_options": ${DOMAINS_JSON},
   "default_proxy": "$(json_escape "$DEFAULT_PROXY")",
   "use_registration_proxy": $([[ -n "${DEFAULT_PROXY// }" ]] && printf 'true' || printf 'false'),
   "cpa_base_url": "$(json_escape "$CPA_BASE_URL")",
@@ -71,7 +113,7 @@ cat > "$INSTALL_DIR/config/web_config.json" <<EOF
   "mail_api_key": "$(json_escape "$MAIL_API_KEY")",
   "port": ${PORT}
 }
-EOF
+EOW
 
 # 启动 dan-web 程序
 exec "$INSTALL_DIR/$LOCAL_BINARY"

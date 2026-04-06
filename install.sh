@@ -11,17 +11,11 @@ CPA_BASE_URL=""
 CPA_TOKEN=""
 MAIL_API_URL=""
 MAIL_API_KEY=""
-THREADS="68"
+THREADS="20"
 WEB_TOKEN="linuxdo"
 CLIENT_API_TOKEN="linuxdo"
 PORT="25666"
 DEFAULT_PROXY=""
-DEFAULT_DOMAINS_API_URL="https://gpt-up.icoa.pp.ua/v0/management/domains"
-SYSTEMD="0"
-SERVICE_NAME="dan-web"
-BACKGROUND="0"
-LOG_FILE=""
-PID_FILE=""
 
 usage() {
   cat <<'EOF'
@@ -41,11 +35,6 @@ Options:
   --client-api-token TOKEN
   --port N
   --default-proxy URL
-  --systemd
-  --service-name NAME
-  --background
-  --log-file PATH
-  --pid-file PATH
   -h, --help
 EOF
 }
@@ -64,11 +53,6 @@ while [[ $# -gt 0 ]]; do
     --client-api-token) CLIENT_API_TOKEN="${2:-}"; shift 2 ;;
     --port) PORT="${2:-}"; shift 2 ;;
     --default-proxy) DEFAULT_PROXY="${2:-}"; shift 2 ;;
-    --systemd) SYSTEMD="1"; shift ;;
-    --service-name) SERVICE_NAME="${2:-}"; shift 2 ;;
-    --background) BACKGROUND="1"; shift ;;
-    --log-file) LOG_FILE="${2:-}"; shift 2 ;;
-    --pid-file) PID_FILE="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 1 ;;
   esac
@@ -93,52 +77,10 @@ json_escape() {
   printf '%s' "$value"
 }
 
-trim() {
-  printf '%s' "${1-}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
-}
-
-resolve_domains_api_url() {
-  local base
-  base="$(trim "${CPA_BASE_URL:-}")"
-  if [[ -z "$base" ]]; then
-    printf '%s' "$DEFAULT_DOMAINS_API_URL"
-    return
-  fi
-  base="${base%/}"
-  if [[ "$base" == */v0/management/domains ]]; then
-    printf '%s' "$base"
-  elif [[ "$base" == */v0/management ]]; then
-    printf '%s/domains' "$base"
-  else
-    printf '%s/v0/management/domains' "$base"
-  fi
-}
-
-fetch_domains_json() {
-  local url raw compact domains
-  url="$1"
-  raw="$(curl -fsSL "$url")" || {
-    echo "Failed to fetch domains from ${url}" >&2
-    exit 1
-  }
-  compact="$(printf '%s' "$raw" | tr -d '\r\n')"
-  domains="$(printf '%s' "$compact" | sed -n 's/.*"domains"[[:space:]]*:[[:space:]]*\(\[[^]]*]\).*/\1/p')"
-  if [[ -z "$domains" ]]; then
-    echo "Domains API returned an invalid payload: $raw" >&2
-    exit 1
-  fi
-  if [[ "$domains" == "[]" ]]; then
-    echo "Domains API returned an empty domains list." >&2
-    exit 1
-  fi
-  printf '%s' "$domains"
-}
-
 detect_os() {
   case "$(uname -s)" in
     Linux) printf 'linux' ;;
     Darwin) printf 'darwin' ;;
-    MINGW*|MSYS*|CYGWIN*) printf 'windows' ;;
     *) echo "Unsupported operating system: $(uname -s)" >&2; exit 1 ;;
   esac
 }
@@ -161,31 +103,6 @@ build_release_base() {
 
 OS="$(detect_os)"
 ARCH="$(detect_arch)"
-
-if [[ "$OS" == "windows" ]]; then
-  echo "Use install.ps1 on Windows." >&2
-  exit 1
-fi
-
-if [[ "$SYSTEMD" == "1" && "$OS" != "linux" ]]; then
-  echo "--systemd is only supported on Linux." >&2
-  exit 1
-fi
-
-if [[ "$SYSTEMD" == "1" && "$BACKGROUND" == "1" ]]; then
-  echo "--systemd and --background cannot be used together." >&2
-  exit 1
-fi
-
-if [[ "$SYSTEMD" == "1" && "$INSTALL_DIR" == "$PWD/dan-runtime" ]]; then
-  INSTALL_DIR="/opt/dan-runtime"
-fi
-
-case "$COMPONENT" in
-  dan|dan-web|dan-token-refresh) ;;
-  *) echo "Unsupported component: $COMPONENT" >&2; exit 1 ;;
-esac
-
 ASSET_NAME="${COMPONENT}-${OS}-${ARCH}"
 LOCAL_BINARY="$COMPONENT"
 RELEASE_BASE="$(build_release_base)"
@@ -207,42 +124,14 @@ chmod +x "$TMP_BINARY"
 echo "Downloading SHA256SUMS.txt..."
 curl -fL "$CHECKSUM_URL" -o "$INSTALL_DIR/SHA256SUMS.txt"
 tr -d '\r' < "$INSTALL_DIR/SHA256SUMS.txt" > "$INSTALL_DIR/SHA256SUMS.unix.txt"
-expected="$(awk -v name="$ASSET_NAME" '$2 == name { print $1; exit }' "$INSTALL_DIR/SHA256SUMS.unix.txt")"
-[[ -n "$expected" ]] || { echo "Missing checksum entry for ${ASSET_NAME}." >&2; exit 1; }
-
-if command -v sha256sum >/dev/null 2>&1; then
-  actual="$(sha256sum "$TMP_BINARY" | awk '{print $1}')"
-  [[ "$expected" == "$actual" ]] || { echo "Checksum verification failed." >&2; exit 1; }
-elif command -v shasum >/dev/null 2>&1; then
-  actual="$(shasum -a 256 "$TMP_BINARY" | awk '{print $1}')"
-  [[ "$expected" == "$actual" ]] || { echo "Checksum verification failed." >&2; exit 1; }
-else
-  echo "No checksum tool found; skipped verification."
-fi
 
 mv -f "$TMP_BINARY" "$INSTALL_DIR/$LOCAL_BINARY"
 chmod +x "$INSTALL_DIR/$LOCAL_BINARY"
 
-DOMAINS_API_URL="$(resolve_domains_api_url)"
-    echo "[INFO] Using hardcoded domain: miaobixiezuo.com"
-    DOMAINS="miaobixiezuo.com"
-{
-  "ak_file": "ak.txt",
-  "rk_file": "rk.txt",
-  "token_json_dir": "codex_tokens",
-  "server_config_url": "",
-  "server_api_token": "",
-  "domain_report_url": "",
-  "upload_api_url": "https://example.com/v0/management/auth-files",
-  "upload_api_token": "replace-me",
-  "oauth_issuer": "https://auth.openai.com",
-  "oauth_client_id": "app_EMoamEEZ73f0CkXaXp7hrann",
-  "oauth_redirect_uri": "http://localhost:1455/auth/callback",
-  "enable_oauth": true,
-  "oauth_required": true
-}
-EOF
+# 硬编码域名逻辑
+DOMAINS_JSON='["miaobixiezuo.com"]'
 
+echo "Generating web_config.json..."
 cat > "$INSTALL_DIR/config/web_config.json" <<EOF
 {
   "target_min_tokens": 15000,
@@ -268,74 +157,6 @@ cat > "$INSTALL_DIR/config/web_config.json" <<EOF
 }
 EOF
 
-if [[ "$SYSTEMD" == "1" ]]; then
-  if [[ "$(id -u)" -ne 0 ]]; then
-    echo "--systemd requires root." >&2
-    exit 1
-  fi
-  if ! command -v systemctl >/dev/null 2>&1; then
-    echo "systemctl is not available on this host." >&2
-    exit 1
-  fi
-
-  cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
-[Unit]
-Description=${SERVICE_NAME}
-After=network.target
-
-[Service]
-Type=simple
-WorkingDirectory=${INSTALL_DIR}
-ExecStart=${INSTALL_DIR}/${LOCAL_BINARY}
-Restart=always
-RestartSec=5
-User=root
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-  systemctl daemon-reload
-  systemctl enable --now "${SERVICE_NAME}.service"
-fi
-
-if [[ "$BACKGROUND" == "1" ]]; then
-  LOG_FILE="${LOG_FILE:-$INSTALL_DIR/${LOCAL_BINARY}.log}"
-  PID_FILE="${PID_FILE:-$INSTALL_DIR/${LOCAL_BINARY}.pid}"
-
-  if [[ -f "$PID_FILE" ]]; then
-    old_pid="$(cat "$PID_FILE" 2>/dev/null || true)"
-    if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
-      kill "$old_pid" 2>/dev/null || true
-      sleep 1
-    fi
-  fi
-
-  (
-    cd "$INSTALL_DIR"
-    nohup "./${LOCAL_BINARY}" >> "$LOG_FILE" 2>&1 &
-    echo $! > "$PID_FILE"
-  )
-fi
-
-echo
-echo "Installed to: $INSTALL_DIR"
-echo "Binary: $INSTALL_DIR/$LOCAL_BINARY"
-echo "Config: $INSTALL_DIR/config/web_config.json"
-echo
-if [[ "$SYSTEMD" == "1" ]]; then
-  echo "Service: ${SERVICE_NAME}.service"
-  echo "Check:"
-  echo "  systemctl status ${SERVICE_NAME}.service"
-  echo "  journalctl -u ${SERVICE_NAME}.service -f"
-elif [[ "$BACKGROUND" == "1" ]]; then
-  echo "Background process started."
-  echo "Log: ${LOG_FILE:-$INSTALL_DIR/${LOCAL_BINARY}.log}"
-  echo "PID: ${PID_FILE:-$INSTALL_DIR/${LOCAL_BINARY}.pid}"
-  echo "Check:"
-  echo "  tail -f ${LOG_FILE:-$INSTALL_DIR/${LOCAL_BINARY}.log}"
-  echo "  cat ${PID_FILE:-$INSTALL_DIR/${LOCAL_BINARY}.pid}"
-else
-  echo "Start command:"
-  echo "  cd \"$INSTALL_DIR\" && ./${LOCAL_BINARY}"
-fi
+echo "Starting $COMPONENT..."
+cd "$INSTALL_DIR"
+exec "./$LOCAL_BINARY"

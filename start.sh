@@ -56,10 +56,25 @@ echo "[INFO] Pre-launch connectivity check..."
 echo "Checking CPA_BASE_URL: ${CPA_BASE_URL:-https://gpt-up.icoa.pp.ua/}"
 curl -Is "${CPA_BASE_URL:-https://gpt-up.icoa.pp.ua/}" | head -n 1 || echo "[WARN] CPA_BASE_URL check failed."
 
-echo "Checking MAIL_API_URL: ${MAIL_API_URL:-https://gpt-mail.icoa.pp.ua/}"
-curl -Is "${MAIL_API_URL:-https://gpt-mail.icoa.pp.ua/}" | head -n 1 || echo "[WARN] MAIL_API_URL check failed."
+echo "Checking MAIL_API_URL: ${MAIL_API_URL:-https://mail-api.miaobixiezuo.com/v0/messages}"
+curl -Is "${MAIL_API_URL:-https://mail-api.miaobixiezuo.com/v0/messages}" | head -n 1 || echo "[WARN] MAIL_API_URL check failed."
 
-# 5. 启动程序并强制输出
+# 5. 启动程序
 echo "[INFO] Launching dan-web binary on port $TARGET_PORT..."
-# 使用 stdbuf 强制行缓冲输出，并将 stderr 合并到 stdout
-exec stdbuf -oL -eL /app/dan-web 2>&1
+echo "[DEBUG] Executing command: /app/dan-web"
+
+# 启动 dan-web 并捕获所有输出
+# 我们不再使用 exec，而是直接运行，这样可以在程序退出后打印额外信息
+/app/dan-web 2>&1 | stdbuf -oL -eL cat
+
+# 如果程序意外退出，打印退出状态
+EXIT_CODE=$?
+echo "[ERROR] dan-web process exited with code $EXIT_CODE"
+if [ $EXIT_CODE -ne 0 ]; then
+    echo "[DEBUG] Checking if binary exists and is executable..."
+    ls -l /app/dan-web
+    ldd /app/dan-web || echo "[WARN] Could not run ldd on binary."
+fi
+
+# 保持容器运行一段时间，以便查看错误日志
+sleep 10

@@ -9,9 +9,10 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# 复制启动脚本
+# 复制启动脚本和安装脚本
 COPY start.sh .
-RUN chmod +x start.sh
+COPY install.sh .
+RUN chmod +x start.sh install.sh
 
 # 暴露程序端口 (Railway 会通过 PORT 环境变量覆盖)
 EXPOSE 25666

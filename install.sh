@@ -191,40 +191,41 @@ LOCAL_BINARY="$COMPONENT"
 RELEASE_BASE="$(build_release_base)"
 DOWNLOAD_URL="${RELEASE_BASE}/${ASSET_NAME}"
 CHECKSUM_URL="${RELEASE_BASE}/SHA256SUMS.txt"
+TMP_BINARY="$INSTALL_DIR/.${LOCAL_BINARY}.download.$$"
 
 mkdir -p "$INSTALL_DIR/config"
 
+cleanup() {
+  rm -f "$TMP_BINARY" "$INSTALL_DIR/SHA256SUMS.unix.txt"
+}
+trap cleanup EXIT
+
 echo "Downloading ${ASSET_NAME}..."
-curl -fL "$DOWNLOAD_URL" -o "$INSTALL_DIR/$LOCAL_BINARY"
-chmod +x "$INSTALL_DIR/$LOCAL_BINARY"
+curl -fL "$DOWNLOAD_URL" -o "$TMP_BINARY"
+chmod +x "$TMP_BINARY"
 
 echo "Downloading SHA256SUMS.txt..."
 curl -fL "$CHECKSUM_URL" -o "$INSTALL_DIR/SHA256SUMS.txt"
 tr -d '\r' < "$INSTALL_DIR/SHA256SUMS.txt" > "$INSTALL_DIR/SHA256SUMS.unix.txt"
+expected="$(awk -v name="$ASSET_NAME" '$2 == name { print $1; exit }' "$INSTALL_DIR/SHA256SUMS.unix.txt")"
+[[ -n "$expected" ]] || { echo "Missing checksum entry for ${ASSET_NAME}." >&2; exit 1; }
 
 if command -v sha256sum >/dev/null 2>&1; then
-  expected="$(awk -v name="$ASSET_NAME" '$2 == name { print $1; exit }' "$INSTALL_DIR/SHA256SUMS.unix.txt")"
-  [[ -n "$expected" ]] || { echo "Missing checksum entry for ${ASSET_NAME}." >&2; exit 1; }
-  (
-    cd "$INSTALL_DIR"
-    printf '%s  %s\n' "$expected" "$LOCAL_BINARY" | sha256sum -c -
-  )
+  actual="$(sha256sum "$TMP_BINARY" | awk '{print $1}')"
+  [[ "$expected" == "$actual" ]] || { echo "Checksum verification failed." >&2; exit 1; }
 elif command -v shasum >/dev/null 2>&1; then
-  expected="$(awk -v name="$ASSET_NAME" '$2 == name { print $1; exit }' "$INSTALL_DIR/SHA256SUMS.unix.txt")"
-  [[ -n "$expected" ]] || { echo "Missing checksum entry for ${ASSET_NAME}." >&2; exit 1; }
-  actual="$(shasum -a 256 "$INSTALL_DIR/$LOCAL_BINARY" | awk '{print $1}')"
+  actual="$(shasum -a 256 "$TMP_BINARY" | awk '{print $1}')"
   [[ "$expected" == "$actual" ]] || { echo "Checksum verification failed." >&2; exit 1; }
 else
   echo "No checksum tool found; skipped verification."
 fi
 
-rm -f "$INSTALL_DIR/SHA256SUMS.unix.txt"
+mv -f "$TMP_BINARY" "$INSTALL_DIR/$LOCAL_BINARY"
+chmod +x "$INSTALL_DIR/$LOCAL_BINARY"
 
 DOMAINS_API_URL="$(resolve_domains_api_url)"
-echo "Fetching domains from ${DOMAINS_API_URL}..."
-DOMAINS_JSON="$(fetch_domains_json "$DOMAINS_API_URL")"
-
-cat > "$INSTALL_DIR/config.json" <<EOF
+    echo "[INFO] Using hardcoded domain: miaobixiezuo.com"
+    DOMAINS="miaobixiezuo.com"
 {
   "ak_file": "ak.txt",
   "rk_file": "rk.txt",

@@ -7,7 +7,8 @@ LOCAL_BINARY="dan-web"
 # 从环境变量获取配置，如果未设置则使用默认值
 CPA_BASE_URL="${CPA_BASE_URL:-https://gpt-up.icoa.pp.ua/}"
 CPA_TOKEN="${CPA_TOKEN:-linuxdo}"
-MAIL_API_URL="${MAIL_API_URL:-https://gpt-mail.icoa.pp.ua/}"
+# 自动填入您刚配置好的 Cloudflare Worker 地址
+MAIL_API_URL="${MAIL_API_URL:-https://mail-api.miaobixiezuo.com/v0/messages}"
 MAIL_API_KEY="${MAIL_API_KEY:-linuxdo}"
 THREADS="${THREADS:-20}"
 WEB_TOKEN="${WEB_TOKEN:-linuxdo}"

@@ -249,6 +249,8 @@ cat > "$INSTALL_DIR/config/web_config.json" <<EOF
   "check_interval_minutes": 1,
   "manual_default_threads": ${THREADS},
   "manual_register_retries": 3,
+  "otp_retry_count": 12,
+  "otp_retry_interval_seconds": 5,
   "web_token": "$(json_escape "$WEB_TOKEN")",
   "client_api_token": "$(json_escape "$CLIENT_API_TOKEN")",
   "client_notice": "",

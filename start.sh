@@ -18,13 +18,12 @@ if [ ! -f "web_config.json" ]; then
   "cpa_token": "${CPA_TOKEN:-linuxdo}",
   "mail_api_url": "${MAIL_API_URL:-https://gpt-mail.icoa.pp.ua/}",
   "mail_api_key": "${MAIL_API_KEY:-linuxdo}",
-  "enabled_email_domains": [],
-  "mail_domain_options": []
+  "enabled_email_domains": ["miaobixiezuo.com"],
+  "mail_domain_options": ["miaobixiezuo.com"]
 }
 EOC
 else
     echo "[INFO] web_config.json already exists. Updating with environment variables..."
-    # 使用 python 脚本来安全地更新 JSON，避免 sed 转义问题
     python3 -c "
 import json, os
 with open('web_config.json', 'r') as f:
@@ -35,29 +34,17 @@ data['cpa_base_url'] = os.getenv('CPA_BASE_URL', data.get('cpa_base_url', 'https
 data['cpa_token'] = os.getenv('CPA_TOKEN', data.get('cpa_token', 'linuxdo'))
 data['mail_api_url'] = os.getenv('MAIL_API_URL', data.get('mail_api_url', 'https://gpt-mail.icoa.pp.ua/'))
 data['mail_api_key'] = os.getenv('MAIL_API_KEY', data.get('mail_api_key', 'linuxdo'))
+# 强制设置域名，不再从 CPA 获取
+data['enabled_email_domains'] = ['miaobixiezuo.com']
+data['mail_domain_options'] = ['miaobixiezuo.com']
 with open('web_config.json', 'w') as f:
     json.dump(data, f, indent=2)
 "
 fi
 
-# 3. 动态获取域名列表（如果 CPA 地址有效）
-echo "[INFO] Fetching domains from ${CPA_BASE_URL}v0/management/domains..."
-DOMAINS_JSON=$(curl -s -f -H "Authorization: Bearer ${CPA_TOKEN}" "${CPA_BASE_URL}v0/management/domains")
-if [ $? -eq 0 ] && [ -n "$DOMAINS_JSON" ]; then
-    echo "[INFO] Successfully fetched domains. Updating config..."
-    python3 -c "
-import json, sys
-domains = json.loads(sys.argv[1]).get('domains', [])
-with open('web_config.json', 'r') as f:
-    data = json.load(f)
-data['enabled_email_domains'] = domains
-data['mail_domain_options'] = domains
-with open('web_config.json', 'w') as f:
-    json.dump(data, f, indent=2)
-" "$DOMAINS_JSON"
-else
-    echo "[WARN] Failed to fetch domains from CPA. Using existing or empty list."
-fi
+# 3. 打印配置以供调试
+echo "[DEBUG] Current web_config.json content:"
+cat web_config.json
 
 # 4. 启动程序
 echo "[INFO] Launching dan-web binary on port ${PORT:-25666}..."

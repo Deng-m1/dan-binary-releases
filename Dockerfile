@@ -13,8 +13,9 @@ WORKDIR /app
 RUN curl -fL https://github.com/uton88/dan-binary-releases/releases/latest/download/dan-web-linux-amd64 -o dan-web && \
     chmod +x dan-web
 
-# 复制启动脚本
+# 复制启动脚本并赋予执行权限
 COPY start.sh .
+RUN chmod +x start.sh
 
 # 暴露程序端口 (Railway 会通过 PORT 环境变量覆盖)
 EXPOSE 25666

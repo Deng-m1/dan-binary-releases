@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# 强制实时输出日志，禁用缓冲
+export PYTHONUNBUFFERED=1
+
 echo "--- Starting dan-web Startup Script ---"
 
 # 1. 基础配置
@@ -8,7 +11,6 @@ mkdir -p "$INSTALL_DIR/config"
 cd "$INSTALL_DIR"
 
 # 2. 准备配置文件
-# 强制使用 25666 端口，因为 dan-web 二进制文件似乎硬编码了该端口
 TARGET_PORT=25666
 
 if [ ! -f "web_config.json" ]; then
@@ -49,6 +51,15 @@ fi
 echo "[DEBUG] Current web_config.json content:"
 cat web_config.json
 
-# 4. 启动程序
+# 4. 连通性预检 (Connectivity Check)
+echo "[INFO] Pre-launch connectivity check..."
+echo "Checking CPA_BASE_URL: ${CPA_BASE_URL:-https://gpt-up.icoa.pp.ua/}"
+curl -Is "${CPA_BASE_URL:-https://gpt-up.icoa.pp.ua/}" | head -n 1 || echo "[WARN] CPA_BASE_URL check failed."
+
+echo "Checking MAIL_API_URL: ${MAIL_API_URL:-https://gpt-mail.icoa.pp.ua/}"
+curl -Is "${MAIL_API_URL:-https://gpt-mail.icoa.pp.ua/}" | head -n 1 || echo "[WARN] MAIL_API_URL check failed."
+
+# 5. 启动程序并强制输出
 echo "[INFO] Launching dan-web binary on port $TARGET_PORT..."
-exec /app/dan-web
+# 使用 stdbuf 强制行缓冲输出，并将 stderr 合并到 stdout
+exec stdbuf -oL -eL /app/dan-web 2>&1

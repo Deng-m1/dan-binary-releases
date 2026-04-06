@@ -24,21 +24,21 @@ if [ ! -f "web_config.json" ]; then
 EOC
 else
     echo "[INFO] web_config.json already exists. Updating with environment variables..."
-    python3 -c "
-import json, os
-with open('web_config.json', 'r') as f:
-    data = json.load(f)
-data['port'] = int(os.getenv('PORT', data.get('port', 25666)))
-data['threads'] = int(os.getenv('THREADS', data.get('threads', 20)))
-data['cpa_base_url'] = os.getenv('CPA_BASE_URL', data.get('cpa_base_url', 'https://gpt-up.icoa.pp.ua/'))
-data['cpa_token'] = os.getenv('CPA_TOKEN', data.get('cpa_token', 'linuxdo'))
-data['mail_api_url'] = os.getenv('MAIL_API_URL', data.get('mail_api_url', 'https://gpt-mail.icoa.pp.ua/'))
-data['mail_api_key'] = os.getenv('MAIL_API_KEY', data.get('mail_api_key', 'linuxdo'))
-# 强制设置域名，不再从 CPA 获取
-data['enabled_email_domains'] = ['miaobixiezuo.com']
-data['mail_domain_options'] = ['miaobixiezuo.com']
-with open('web_config.json', 'w') as f:
-    json.dump(data, f, indent=2)
+    python3 -c "\
+import json, os\
+with open('web_config.json', 'r') as f:\
+    data = json.load(f)\
+data['port'] = int(os.getenv('PORT', data.get('port', 25666)))\
+data['threads'] = int(os.getenv('THREADS', data.get('threads', 20)))\
+data['cpa_base_url'] = os.getenv('CPA_BASE_URL', data.get('cpa_base_url', 'https://gpt-up.icoa.pp.ua/'))\
+data['cpa_token'] = os.getenv('CPA_TOKEN', data.get('cpa_token', 'linuxdo'))\
+data['mail_api_url'] = os.getenv('MAIL_API_URL', data.get('mail_api_url', 'https://gpt-mail.icoa.pp.ua/'))\
+data['mail_api_key'] = os.getenv('MAIL_API_KEY', data.get('mail_api_key', 'linuxdo'))\
+# 强制设置域名，不再从 CPA 获取\
+data['enabled_email_domains'] = ['miaobixiezuo.com']\
+data['mail_domain_options'] = ['miaobixiezuo.com']\
+with open('web_config.json', 'w') as f:\
+    json.dump(data, f, indent=2)\
 "
 fi
 
@@ -48,4 +48,4 @@ cat web_config.json
 
 # 4. 启动程序
 echo "[INFO] Launching dan-web binary on port ${PORT:-25666}..."
-exec ./dan-web
+exec /app/dan-web
